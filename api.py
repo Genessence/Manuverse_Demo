@@ -404,10 +404,10 @@ async def query_data(request: QueryRequest):
             )
         except Exception as e:
             error_msg = str(e)
-            if "cannot convert the series to" in error_msg:
+            if "cannot convert the series to" in error_msg or "unsupported operand type" in error_msg:
                 return QueryResponse(
                     session_id=session_id,
-                    response="I encountered an issue processing your data. This might be due to mixed data types in date columns or other formatting issues. Please check your data and try uploading again.",
+                    response="I encountered an issue processing your data. This might be due to mixed data types (numbers and text in the same column) or formatting issues. I've improved the system to handle this better. Please try uploading your file again.",
                     success=False,
                     error_message="Data processing error: " + error_msg,
                     analysis_results={}

@@ -156,23 +156,27 @@ def detect_columns_by_rules(df: pd.DataFrame) -> Dict[str, str]:
         if column_mapping.get(col):
             continue
             
-        # Numeric measures
+        # Numeric measures - Universal detection
         if pd.api.types.is_numeric_dtype(df[col]):
             if any(keyword in col_lower for keyword in [
                 'production', 'output', 'volume', 'quantity', 'count', 'amount', 
-                'sales', 'revenue', 'units', 'total', 'sum'
+                'sales', 'revenue', 'units', 'total', 'sum', 'value', 'score',
+                'measurement', 'result', 'data', 'number', 'level', 'concentration'
             ]):
                 column_mapping[col] = 'numeric_measure'
             elif any(keyword in col_lower for keyword in [
-                'defect', 'error', 'fault', 'failure', 'reject', 'waste', 'scrap'
+                'defect', 'error', 'fault', 'failure', 'reject', 'waste', 'scrap',
+                'negative', 'problem', 'issue'
             ]):
                 column_mapping[col] = 'quality_measure'
             elif any(keyword in col_lower for keyword in [
-                'efficiency', 'rate', 'percent', '%', 'ratio', 'performance'
+                'efficiency', 'rate', 'percent', '%', 'ratio', 'performance',
+                'percentage', 'proportion', 'share'
             ]):
                 column_mapping[col] = 'efficiency_measure'
             elif any(keyword in col_lower for keyword in [
-                'time', 'duration', 'downtime', 'uptime', 'minutes', 'hours'
+                'time', 'duration', 'downtime', 'uptime', 'minutes', 'hours',
+                'period', 'interval', 'cycle'
             ]):
                 column_mapping[col] = 'time_measure'
             else:
@@ -215,6 +219,15 @@ def validate_universal_columns(df: pd.DataFrame, llm_system=None) -> Tuple[pd.Da
             processed_df[date_col] = pd.to_datetime(processed_df[date_col], errors='coerce')
         except Exception as e:
             print(f"Warning: Could not convert {date_col} to datetime: {e}")
+    
+    # Clean up mixed data types in numeric columns
+    numeric_columns = [col for col, type_ in column_mapping.items() if type_ in ['numeric_measure', 'quality_measure', 'efficiency_measure', 'time_measure']]
+    for num_col in numeric_columns:
+        try:
+            # Convert to numeric, coercing errors to NaN
+            processed_df[num_col] = pd.to_numeric(processed_df[num_col], errors='coerce')
+        except Exception as e:
+            print(f"Warning: Could not convert {num_col} to numeric: {e}")
     
     # Create metadata
     metadata = {

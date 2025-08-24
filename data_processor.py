@@ -377,10 +377,15 @@ class UniversalDataProcessor:
         # Add generic derived metrics for any numeric columns
         for col in numeric_cols:
             if col not in ['defect_rate', 'quality_score', 'total_production', 'production_per_hour', 'avg_efficiency']:
-                # Add percentage of total for each numeric column
-                total = df[col].sum()
-                if total > 0:
-                    df[f'{col}_percentage'] = (df[col] / total * 100).fillna(0)
+                try:
+                    # Ensure the column is numeric and handle mixed types
+                    numeric_series = pd.to_numeric(df[col], errors='coerce')
+                    total = numeric_series.sum()
+                    if total > 0 and not pd.isna(total):
+                        df[f'{col}_percentage'] = (numeric_series / total * 100).fillna(0)
+                except Exception as e:
+                    print(f"Warning: Could not calculate percentage for {col}: {e}")
+                    continue
         
         return df
     
