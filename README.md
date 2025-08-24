@@ -1,4 +1,5 @@
 # Universal Data Analysis Chatbot
+# Manuverse_Demo
 
 A powerful AI-powered chatbot that can analyze **any dataset** using Google's Gemini LLM. The chatbot automatically detects column types, understands your data structure, and generates insightful visualizations and analysis through natural language queries.
 
@@ -135,4 +136,4 @@ Charts are automatically generated based on:
 - Query context and intent
 - Statistical significance
 - Visual best practices
-# Manuverse_Demo
+
