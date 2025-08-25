@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import pandas as pd
+import numpy as np
 import io
 import os
 import uuid
@@ -698,6 +699,15 @@ def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
     Returns:
         dict: Universal data summary
     """
+    def safe_float(value):
+        """Convert value to float, handling inf, -inf, and NaN"""
+        try:
+            if pd.isna(value) or np.isinf(value):
+                return None
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+    
     summary = {
         'total_records': len(df),
         'available_columns': df.columns.tolist(),
@@ -708,9 +718,11 @@ def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
     date_columns = metadata.get('date_columns', [])
     if date_columns:
         date_col = date_columns[0]  # Use first date column
+        min_date = df[date_col].min()
+        max_date = df[date_col].max()
         summary['date_range'] = {
-            'start': df[date_col].min().strftime('%Y-%m-%d') if pd.notna(df[date_col].min()) else None,
-            'end': df[date_col].max().strftime('%Y-%m-%d') if pd.notna(df[date_col].max()) else None
+            'start': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
+            'end': max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else None
         }
     
     # Numeric summaries
@@ -719,13 +731,23 @@ def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
         summary['numeric_summary'] = {}
         for col in numeric_cols:
             if col in df.columns:
-                summary['numeric_summary'][col] = {
-                    'total': float(df[col].sum()),
-                    'mean': float(df[col].mean()),
-                    'max': float(df[col].max()),
-                    'min': float(df[col].min()),
-                    'std': float(df[col].std())
-                }
+                col_data = df[col].dropna()  # Remove NaN values for calculations
+                if len(col_data) > 0:
+                    summary['numeric_summary'][col] = {
+                        'total': safe_float(col_data.sum()),
+                        'mean': safe_float(col_data.mean()),
+                        'max': safe_float(col_data.max()),
+                        'min': safe_float(col_data.min()),
+                        'std': safe_float(col_data.std())
+                    }
+                else:
+                    summary['numeric_summary'][col] = {
+                        'total': None,
+                        'mean': None,
+                        'max': None,
+                        'min': None,
+                        'std': None
+                    }
     
     # Categorical summaries
     categorical_cols = metadata.get('categorical_columns', [])
@@ -733,12 +755,23 @@ def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
         summary['categorical_summary'] = {}
         for col in categorical_cols:
             if col in df.columns:
-                summary['categorical_summary'][col] = df[col].value_counts().to_dict()
+                # Convert to string to handle any data type issues
+                value_counts = df[col].astype(str).value_counts().to_dict()
+                summary['categorical_summary'][col] = value_counts
     
     return summary
 
 def compile_universal_analysis_results(filtered_data, aggregated_data, instructions, metadata) -> Dict:
     """Compile analysis results for any dataset."""
+    def safe_float(value):
+        """Convert value to float, handling inf, -inf, and NaN"""
+        try:
+            if pd.isna(value) or np.isinf(value):
+                return None
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+    
     results = {
         'query_type': instructions.get('analysis_type', 'general_analysis'),
         'records_analyzed': len(filtered_data),
@@ -749,9 +782,11 @@ def compile_universal_analysis_results(filtered_data, aggregated_data, instructi
     date_columns = metadata.get('date_columns', [])
     if date_columns and date_columns[0] in filtered_data.columns:
         date_col = date_columns[0]
+        min_date = filtered_data[date_col].min()
+        max_date = filtered_data[date_col].max()
         results['date_range'] = {
-            'start': filtered_data[date_col].min().strftime('%Y-%m-%d'),
-            'end': filtered_data[date_col].max().strftime('%Y-%m-%d'),
+            'start': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
+            'end': max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else None,
             'days': len(filtered_data[date_col].unique())
         }
     
@@ -759,12 +794,21 @@ def compile_universal_analysis_results(filtered_data, aggregated_data, instructi
     numeric_cols = metadata.get('numeric_measures', []) + metadata.get('quality_measures', [])
     for col in numeric_cols:
         if col in filtered_data.columns:
-            results['metrics_summary'][col] = {
-                'total': float(filtered_data[col].sum()),
-                'average': float(filtered_data[col].mean()),
-                'max': float(filtered_data[col].max()),
-                'min': float(filtered_data[col].min())
-            }
+            col_data = filtered_data[col].dropna()  # Remove NaN values for calculations
+            if len(col_data) > 0:
+                results['metrics_summary'][col] = {
+                    'total': safe_float(col_data.sum()),
+                    'average': safe_float(col_data.mean()),
+                    'max': safe_float(col_data.max()),
+                    'min': safe_float(col_data.min())
+                }
+            else:
+                results['metrics_summary'][col] = {
+                    'total': None,
+                    'average': None,
+                    'max': None,
+                    'min': None
+                }
     
     return results
 

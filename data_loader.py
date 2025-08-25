@@ -226,6 +226,10 @@ def validate_universal_columns(df: pd.DataFrame, llm_system=None) -> Tuple[pd.Da
         try:
             # Convert to numeric, coercing errors to NaN
             processed_df[num_col] = pd.to_numeric(processed_df[num_col], errors='coerce')
+            
+            # Replace infinite values with NaN
+            processed_df[num_col] = processed_df[num_col].replace([np.inf, -np.inf], np.nan)
+            
         except Exception as e:
             print(f"Warning: Could not convert {num_col} to numeric: {e}")
     
