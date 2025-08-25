@@ -147,6 +147,53 @@ const ChartContainer = styled.div`
   padding: 16px;
 `;
 
+// Column display styles
+const ColumnDisplayStyles = styled.div`
+  .column-display {
+    margin-top: 16px;
+    padding: 16px;
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    
+    h4 {
+      margin: 0 0 12px 0;
+      color: #a855f7;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .column-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .column-item {
+      background-color: #21262d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      border: 1px solid #30363d;
+      white-space: nowrap;
+    }
+    
+    .column-analysis {
+      .analysis-item {
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #8b949e;
+        
+        strong {
+          color: #c9d1d9;
+        }
+      }
+    }
+  }
+`;
+
 function ChatMessage({ message, isLoading = false }) {
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString([], { 
@@ -176,13 +223,18 @@ function ChatMessage({ message, isLoading = false }) {
 
   return (
     <MessageContainer>
+      <ColumnDisplayStyles />
       <Avatar type={message.type}>
         {message.type === 'user' ? <User size={16} /> : <Bot size={16} />}
       </Avatar>
       <MessageContent>
         <MessageBubble type={message.type}>
           <MessageText>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            {message.content.includes('<div class="column-display">') ? (
+              <div dangerouslySetInnerHTML={{ __html: message.content }} />
+            ) : (
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            )}
           </MessageText>
         </MessageBubble>
         

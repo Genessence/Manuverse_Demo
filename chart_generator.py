@@ -13,7 +13,7 @@ import os
 from datetime import datetime
 
 
-class ManufacturingChartGenerator:
+class UniversalChartGenerator:
     """
     Generates charts for manufacturing data analysis based on chart configuration.
     """

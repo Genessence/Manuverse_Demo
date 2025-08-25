@@ -179,6 +179,53 @@ const InputButton = styled.button`
   }
 `;
 
+// Column display styles
+const ColumnDisplayStyles = styled.div`
+  .column-display {
+    margin-top: 16px;
+    padding: 16px;
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    
+    h4 {
+      margin: 0 0 12px 0;
+      color: #a855f7;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .column-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .column-item {
+      background-color: #21262d;
+      color: #c9d1d9;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      border: 1px solid #30363d;
+      white-space: nowrap;
+    }
+    
+    .column-analysis {
+      .analysis-item {
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: #8b949e;
+        
+        strong {
+          color: #c9d1d9;
+        }
+      }
+    }
+  }
+`;
+
 const SidebarTitle = styled.div`
   display: flex;
   align-items: center;
@@ -524,11 +571,36 @@ function App() {
           });
         }
         
-        // Add a success message
+        // Create column display HTML
+        const columnDisplay = `
+          <div class="column-display">
+            <h4>📋 Dataset Columns (${result.data_info?.shape[1] || result.data_summary?.available_columns?.length || 'N/A'})</h4>
+            <div class="column-list">
+              ${(result.data_info?.columns || result.data_summary?.available_columns || []).map((col, index) => 
+                `<span class="column-item">${index + 1}. ${col}</span>`
+              ).join('')}
+            </div>
+            ${result.column_metadata ? `
+              <h4>🔍 Column Analysis</h4>
+              <div class="column-analysis">
+                ${Object.entries(result.column_metadata).map(([type, cols]) => 
+                  cols && cols.length > 0 ? `<div class="analysis-item"><strong>${type.replace('_', ' ').toUpperCase()}:</strong> ${cols.join(', ')}</div>` : ''
+                ).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+        
+        // Debug logging
+        console.log('🔍 Column Display HTML:', columnDisplay);
+        console.log('🔍 Data Info:', result.data_info);
+        console.log('🔍 Column Metadata:', result.column_metadata);
+        
+        // Add a success message with column display
         const successMessage = {
           id: Date.now(),
           type: 'bot',
-          content: `✅ File "${file.name}" uploaded successfully! Session ID: ${result.session_id}. You can now ask questions about your data.`,
+          content: `✅ File "${file.name}" uploaded successfully! Session ID: ${result.session_id}. You can now ask questions about your data. ${columnDisplay}`,
           timestamp: new Date()
         };
         setMessages(prev => [...prev, successMessage]);
@@ -672,6 +744,7 @@ function App() {
 
   return (
     <AppContainer>
+      <ColumnDisplayStyles />
       <Sidebar>
         <SidebarTitle>
           <ArrowLeft size={16} />

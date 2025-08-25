@@ -23,7 +23,7 @@ from pathlib import Path
 from data_loader import load_manufacturing_data, validate_universal_columns, get_data_summary
 from llm_system import ManufacturingLLMSystem
 from data_processor import UniversalDataProcessor
-from chart_generator import ManufacturingChartGenerator
+from chart_generator import UniversalChartGenerator
 
 # Configure logging
 logging.basicConfig(
@@ -295,8 +295,8 @@ async def upload_dataset(file: UploadFile = File(...)):
             # Get data summary
             data_summary = get_universal_data_summary(processed_df, column_metadata)
             
-            # New: Generate a default summary chart
-            chart_generator = ManufacturingChartGenerator()
+                                      # New: Generate a default summary chart
+            chart_generator = UniversalChartGenerator()
             chart_filename = f"summary_chart_{session_id}.png"
             chart_path = f"sessions/{session_id}/{chart_filename}"
             chart_url = None
@@ -329,7 +329,7 @@ async def upload_dataset(file: UploadFile = File(...)):
                 'upload_timestamp': pd.Timestamp.now().isoformat(),
                 'file_path': str(file_path),
                 'processor': UniversalDataProcessor(),
-                'chart_generator': ManufacturingChartGenerator()
+                                 'chart_generator': UniversalChartGenerator()
             }
             
             # Prepare response
@@ -505,12 +505,14 @@ async def query_data(request: QueryRequest):
             filtered_data, aggregated_data, analysis_instructions, metadata
         )
         
-        # Generate insights
+        # Generate insights for regular queries
         textual_response = llm_system.generate_insights(analysis_results, "")
         
         # Determine if chart should be generated based on query type
         chart_type = analysis_instructions.get('chart_type', 'line')
         should_generate_chart = chart_type not in ['none', None] and chart_type in ['line', 'bar', 'scatter', 'pie', 'heatmap']
+        
+        print(f"🔍 DEBUG: Chart type: {chart_type}, Should generate: {should_generate_chart}")
         chart_url = None
         chart_data_js = None
         
@@ -523,6 +525,9 @@ async def query_data(request: QueryRequest):
                 
                 # Generate Chart.js compatible data
                 chart_data_js = prepare_chartjs_data(chart_data, chart_config)
+                print(f"🔍 DEBUG: Chart data shape: {chart_data.shape}")
+                print(f"🔍 DEBUG: Chart config: {chart_config}")
+                print(f"🔍 DEBUG: Chart.js data generated: {chart_data_js}")
                 
                 chart_filename = f"chart_{session_id}_{uuid.uuid4().hex[:8]}.png"
                 chart_path = f"sessions/{session_id}/{chart_filename}"

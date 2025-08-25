@@ -226,6 +226,8 @@ Please provide a comprehensive analysis and answer based on the manufacturing da
             - Time measures: {column_metadata.get('time_measures', [])}
             """
         
+
+        
         enhanced_prompt = f"""
         {self.system_prompt}
         {context_info}
@@ -335,6 +337,31 @@ Please provide a comprehensive analysis and answer based on the manufacturing da
         Returns:
             str: Textual insights and recommendations
         """
+        # Check if this is a column information query by looking at the data structure
+        if 'column_metadata' in analysis_results or 'available_columns' in analysis_results:
+            # Handle column information query specifically
+            column_info = []
+            
+            # Get available columns
+            available_columns = analysis_results.get('available_columns', [])
+            if available_columns:
+                column_info.append(f"📋 **All Columns ({len(available_columns)}):**")
+                column_info.append(", ".join(available_columns))
+                column_info.append("")
+            
+            # Get column metadata if available
+            metadata = analysis_results.get('column_metadata', {})
+            if metadata:
+                column_info.append("🔍 **Column Analysis:**")
+                for col_type, cols in metadata.items():
+                    if cols and isinstance(cols, list):  # Only show non-empty column lists
+                        column_info.append(f"• {col_type.replace('_', ' ').title()}: {', '.join(cols)}")
+            
+            if column_info:
+                return "\n".join(column_info)
+            else:
+                return "Column information not available in the current analysis."
+        
         # Convert DataFrames to readable format for the prompt
         def make_json_serializable(obj):
             """Recursively convert objects to JSON-serializable format"""
