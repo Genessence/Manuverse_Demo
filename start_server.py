@@ -64,20 +64,34 @@ def start_api_server():
         print(f"❌ Error starting server: {e}")
 
 def serve_web_interface():
-    """Serve the web interface using Python's built-in server."""
+    """Serve the React web interface directly from frontend directory."""
     import http.server
     import socketserver
     
-    web_dir = Path("web")
-    if not web_dir.exists():
-        print("❌ Web interface directory not found")
+    frontend_dir = Path("frontend")
+    if not frontend_dir.exists():
+        print("❌ Frontend directory not found")
         return
     
-    os.chdir("web")
+    # Check if frontend is built
+    build_dir = frontend_dir / "build"
+    if not build_dir.exists():
+        print("❌ Frontend build directory not found. Please run 'npm run build' in the frontend directory first.")
+        return
+    
+    # Create a custom handler for React routing
+    class ReactHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            # Handle React Router - serve index.html for all routes
+            if not self.path.startswith('/static/') and not self.path.startswith('/api/'):
+                self.path = '/index.html'
+            return super().do_GET()
+    
+    os.chdir("frontend/build")
     
     try:
-        with socketserver.TCPServer(("", 8080), http.server.SimpleHTTPRequestHandler) as httpd:
-            print("🌐 Web interface available at: http://localhost:8080")
+        with socketserver.TCPServer(("", 8080), ReactHandler) as httpd:
+            print("🌐 React Web interface available at: http://localhost:8080")
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n👋 Web server stopped")
@@ -110,7 +124,7 @@ def main():
     
     print("\n📊 Starting Universal Data Analysis Chatbot...")
     print("API Server: http://localhost:8000")
-    print("Web Interface: http://localhost:8080")
+    print("React Frontend: http://localhost:8080")
     print("\nPress Ctrl+C to stop")
     print("=" * 50)
     

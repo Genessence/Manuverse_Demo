@@ -12,6 +12,9 @@ import numpy as np
 import io
 import os
 import uuid
+import logging
+import json
+from datetime import datetime
 from typing import Optional, Dict, List
 import shutil
 from pathlib import Path
@@ -21,6 +24,17 @@ from data_loader import load_manufacturing_data, validate_universal_columns, get
 from llm_system import ManufacturingLLMSystem
 from data_processor import UniversalDataProcessor
 from chart_generator import ManufacturingChartGenerator
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('backend_responses.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Universal Data Analysis Chatbot API",
@@ -89,7 +103,9 @@ llm_system = None
 # Initialize LLM system
 try:
     llm_system = ManufacturingLLMSystem()
+    logger.info("🚀 LLM System initialized successfully")
 except Exception as e:
+    logger.error(f"❌ LLM system initialization failed: {e}")
     print(f"Warning: LLM system initialization failed: {e}")
 
 # Request/Response models
@@ -154,7 +170,7 @@ async def root():
     print(result.json()['response'])
     ```
     """
-    return {
+    response_data = {
         "message": "🤖 Universal Data Analysis Chatbot API",
         "version": "1.0.0",
         "status": "✅ Running",
@@ -176,9 +192,14 @@ async def root():
             "/summary/{session_id}": "GET - Get comprehensive data summary",
             "/sessions": "GET - List all active analysis sessions",
             "/chart/{filename}": "GET - Download generated chart images",
-            "/health": "GET - API health status"
+            "health": "GET - API health status"
         }
     }
+    
+    # Log root endpoint access
+    logger.info("🏠 ROOT ENDPOINT ACCESS - API information requested")
+    
+    return response_data
 
 @app.post(
     "/upload",
@@ -230,6 +251,9 @@ async def upload_dataset(file: UploadFile = File(...)):
     - At least 2 columns required
     - Data should be structured (no merged cells in Excel)
     """
+    # Log upload request
+    logger.info(f"📤 UPLOAD REQUEST - Filename: {file.filename}, Size: {file.size} bytes")
+    
     try:
         # Validate file type
         allowed_extensions = ['.csv', '.xlsx', '.xls']
@@ -307,7 +331,8 @@ async def upload_dataset(file: UploadFile = File(...)):
                 'chart_generator': ManufacturingChartGenerator()
             }
             
-            return {
+            # Prepare response
+            response_data = {
                 "session_id": session_id,
                 "message": "File uploaded successfully",
                 "data_info": {
@@ -320,12 +345,20 @@ async def upload_dataset(file: UploadFile = File(...)):
                 "chart_url": chart_url  # Return the chart URL
             }
             
+            # Log successful upload response
+            logger.info(f"✅ UPLOAD SUCCESS - Session ID: {session_id}, Filename: {file.filename}, Shape: {processed_df.shape}")
+            logger.info(f"📊 UPLOAD RESPONSE - {json.dumps(response_data, indent=2)}")
+            
+            return response_data
+            
         except Exception as e:
             # Clean up on error
             shutil.rmtree(session_dir, ignore_errors=True)
+            logger.error(f"❌ UPLOAD PROCESSING ERROR - Session ID: {session_id}, Error: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error processing file: {str(e)}")
             
     except Exception as e:
+        logger.error(f"❌ UPLOAD GENERAL ERROR - Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post(
@@ -392,6 +425,9 @@ async def query_data(request: QueryRequest):
     - **Query text** in natural language
     - Session must have uploaded data
     """
+    # Log query request
+    logger.info(f"🤖 QUERY REQUEST - Session ID: {request.session_id}, Query: '{request.query}'")
+    
     try:
         session_id = request.session_id
         query = request.query
@@ -500,7 +536,8 @@ async def query_data(request: QueryRequest):
                     error_message=f"Chart generation error: {str(e)}"
                 )
         
-        return QueryResponse(
+        # Prepare response
+        response_data = QueryResponse(
             session_id=session_id,
             response=textual_response,
             chart_url=chart_url,
@@ -508,14 +545,26 @@ async def query_data(request: QueryRequest):
             success=True
         )
         
+        # Log successful query response
+        logger.info(f"✅ QUERY SUCCESS - Session ID: {session_id}, Chart URL: {chart_url}")
+        logger.info(f"🤖 QUERY RESPONSE - {json.dumps(response_data.dict(), indent=2)}")
+        
+        return response_data
+        
     except Exception as e:
-        return QueryResponse(
+        error_response = QueryResponse(
             session_id=request.session_id,
             response="",
             success=False,
             error_message=str(e),
             analysis_results={}
         )
+        
+        # Log query error
+        logger.error(f"❌ QUERY ERROR - Session ID: {request.session_id}, Error: {str(e)}")
+        logger.error(f"🚨 QUERY ERROR RESPONSE - {json.dumps(error_response.dict(), indent=2)}")
+        
+        return error_response
 
 @app.get(
     "/summary/{session_id}",
@@ -558,12 +607,18 @@ async def get_data_summary(session_id: str):
     
     session_data = sessions[session_id]
     
-    return DataSummaryResponse(
+    response_data = DataSummaryResponse(
         session_id=session_id,
         summary=session_data['summary'],
         column_metadata=session_data['metadata'],
         success=True
     )
+    
+    # Log summary request
+    logger.info(f"📋 SUMMARY REQUEST - Session ID: {session_id}")
+    logger.info(f"📊 SUMMARY RESPONSE - {json.dumps(response_data.dict(), indent=2)}")
+    
+    return response_data
 
 @app.get(
     "/sessions",
@@ -602,7 +657,13 @@ async def list_sessions():
             columns=session_data['data'].columns.tolist()
         ))
     
-    return {"sessions": session_list, "total": len(session_list)}
+    response_data = {"sessions": session_list, "total": len(session_list)}
+    
+    # Log sessions request
+    logger.info(f"📋 SESSIONS REQUEST - Total Sessions: {len(session_list)}")
+    logger.info(f"📊 SESSIONS RESPONSE - {json.dumps(response_data, indent=2)}")
+    
+    return response_data
 
 @app.get(
     "/health",
@@ -697,6 +758,9 @@ async def get_chart(session_id: str, filename: str):
     if not chart_path.exists():
         raise HTTPException(status_code=404, detail="Chart not found")
     
+    # Log chart request
+    logger.info(f"📊 CHART REQUEST - Session ID: {session_id}, Filename: {filename}")
+    
     return FileResponse(
         chart_path,
         media_type="image/png",
@@ -717,16 +781,27 @@ async def delete_session(session_id: str):
     # Remove from sessions
     del sessions[session_id]
     
-    return {"message": f"Session {session_id} deleted successfully"}
+    response_data = {"message": f"Session {session_id} deleted successfully"}
+    
+    # Log session deletion
+    logger.info(f"🗑️ SESSION DELETE - Session ID: {session_id}")
+    logger.info(f"🗑️ DELETE RESPONSE - {json.dumps(response_data, indent=2)}")
+    
+    return response_data
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
+    response_data = {
         "status": "healthy",
         "llm_available": llm_system is not None,
         "active_sessions": len(sessions)
     }
+    
+    # Log health check
+    logger.info(f"🏥 HEALTH CHECK - LLM Available: {llm_system is not None}, Active Sessions: {len(sessions)}")
+    
+    return response_data
 
 def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
     """
