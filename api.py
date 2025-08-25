@@ -202,6 +202,7 @@ async def upload_dataset(file: UploadFile = File(...)):
     2. **Data Loading** - Reads your data with smart encoding detection  
     3. **Column Analysis** - AI identifies column types (dates, numbers, categories)
     4. **Session Creation** - Generates unique session ID for your data
+    5. **Summary Chart** - Creates a default visualization of your data
     
     ### 📊 Column Types Detected
     - **Date Columns** - Automatically parsed for time-series analysis
@@ -220,6 +221,7 @@ async def upload_dataset(file: UploadFile = File(...)):
     - **Session ID** - Use this for all subsequent queries
     - **Data Summary** - Row/column counts, date ranges
     - **Column Analysis** - How AI interpreted each column
+    - **Summary Chart** - Default visualization of your data
     - **Sample Data** - Preview of your data structure
     
     ### 🚨 File Requirements
@@ -268,6 +270,31 @@ async def upload_dataset(file: UploadFile = File(...)):
             # Get data summary
             data_summary = get_universal_data_summary(processed_df, column_metadata)
             
+            # New: Generate a default summary chart
+            chart_generator = ManufacturingChartGenerator()
+            chart_filename = f"summary_chart_{session_id}.png"
+            chart_path = f"sessions/{session_id}/{chart_filename}"
+            chart_url = None
+            
+            try:
+                # Choose a default chart type based on data structure
+                chart_type = 'bar'  # Default to bar chart
+                if column_metadata.get('date_columns'):
+                    chart_type = 'line'  # Use line chart for time-series data
+                x_axis = column_metadata.get('date_columns', [df.columns[0]])[0]
+                y_axis = column_metadata.get('numeric_measures', [df.select_dtypes(include='number').columns[0]])[0]
+                
+                chart_config = {
+                    'chart_type': chart_type,
+                    'title': f'Summary of {file.filename}',
+                    'x_axis': x_axis,
+                    'y_axis': [y_axis]
+                }
+                chart_generator.plot_manufacturing_data(processed_df, chart_config, chart_path)
+                chart_url = f"/chart/{session_id}/{chart_filename}"
+            except Exception as e:
+                print(f"Warning: Could not generate summary chart: {e}")
+            
             # Store session data
             sessions[session_id] = {
                 'data': processed_df,
@@ -289,7 +316,8 @@ async def upload_dataset(file: UploadFile = File(...)):
                     "columns": processed_df.columns.tolist()
                 },
                 "column_metadata": column_metadata,
-                "data_summary": data_summary
+                "data_summary": data_summary,
+                "chart_url": chart_url  # Return the chart URL
             }
             
         except Exception as e:
@@ -392,7 +420,7 @@ async def query_data(request: QueryRequest):
                 session_id=session_id,
                 response=analysis_instructions.get('message', 'Query not allowed.'),
                 success=False,
-                error_message="Query rejected by manufacturing domain safety filter",
+                error_message="Query rejected by data analysis safety filter",
                 analysis_results={"filter_status": "rejected"}
             )
         
@@ -405,7 +433,11 @@ async def query_data(request: QueryRequest):
             )
         except Exception as e:
             error_msg = str(e)
-            if "cannot convert the series to" in error_msg or "unsupported operand type" in error_msg:
+            if ("cannot convert the series to" in error_msg or 
+                "unsupported operand type" in error_msg or
+                "truth value of a Series is ambiguous" in error_msg or
+                "'>=' not supported between instances of 'str' and 'Timestamp'" in error_msg or
+                "'<=' not supported between instances of 'str' and 'Timestamp'" in error_msg):
                 return QueryResponse(
                     session_id=session_id,
                     response="I encountered an issue processing your data. This might be due to mixed data types (numbers and text in the same column) or formatting issues. I've improved the system to handle this better. Please try uploading your file again.",
@@ -458,7 +490,15 @@ async def query_data(request: QueryRequest):
                 chart_url = f"/chart/{session_id}/{chart_filename}"
             except Exception as e:
                 print(f"Chart generation failed: {e}")
-                # Continue without chart
+                # Return response with error message but continue with analysis
+                return QueryResponse(
+                    session_id=session_id,
+                    response=textual_response + "\n\n⚠️ Note: Analysis completed, but chart generation failed. Please try a different query or check your data.",
+                    chart_url=None,
+                    analysis_results=analysis_results,
+                    success=True,
+                    error_message=f"Chart generation error: {str(e)}"
+                )
         
         return QueryResponse(
             session_id=session_id,

@@ -8,7 +8,7 @@ import json
 import os
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
-from query_filter import ManufacturingQueryFilter, FilterResponse
+from query_filter import UniversalDataQueryFilter, FilterResponse
 
 # Load environment variables
 load_dotenv()
@@ -34,8 +34,8 @@ class ManufacturingLLMSystem:
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         
-        # Initialize manufacturing query filter
-        self.query_filter = ManufacturingQueryFilter()
+        # Initialize universal data query filter
+        self.query_filter = UniversalDataQueryFilter()
         
         self.system_prompt = self._create_system_prompt()
     

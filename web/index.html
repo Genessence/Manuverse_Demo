@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Universal Data Analysis Chatbot</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       * {
         margin: 0;
@@ -208,6 +209,34 @@
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
       }
 
+      .visualization-panel {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+        border: 1px solid #e9ecef;
+      }
+
+      .visualization-panel h4 {
+        margin-bottom: 15px;
+        color: #2c3e50;
+      }
+
+      #chartTypeSelect {
+        padding: 8px 12px;
+        border: 1px solid #e9ecef;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        font-size: 14px;
+      }
+
+      #chartCanvas {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+
       .input-section {
         display: flex;
         gap: 10px;
@@ -389,6 +418,21 @@
             <div>Analyzing your data...</div>
           </div>
 
+          <div
+            class="visualization-panel"
+            id="visualizationPanel"
+            style="display: none"
+          >
+            <h4>📊 Dataset Visualization</h4>
+            <select id="chartTypeSelect" onchange="updateChart()">
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+              <option value="scatter">Scatter Plot</option>
+              <option value="pie">Pie Chart</option>
+            </select>
+            <canvas id="chartCanvas"></canvas>
+          </div>
+
           <div class="input-section">
             <input
               type="text"
@@ -412,6 +456,8 @@
 
     <script>
       let currentSessionId = null;
+      let chartInstance = null;
+      let currentChartData = null;
       const API_BASE = "http://localhost:8000";
 
       // File upload handling
@@ -550,16 +596,40 @@
           if (result.success) {
             let messageHtml = formatResponse(result.response);
 
-            if (result.chart_url) {
-              messageHtml += `<button class="chart-toggle" onclick="toggleChart(this, '${API_BASE}${result.chart_url}')">
-                             📊 Show Visualization
-                         </button>
-                         <div class="chart-container" style="display: none;">
-                             <img src="${API_BASE}${result.chart_url}" alt="Generated Chart">
-                         </div>`;
+            if (result.chart_url || result.chartjs_data) {
+              messageHtml += `<button class="chart-toggle" onclick="toggleChart(this, '${API_BASE}${
+                result.chart_url
+              }', ${JSON.stringify(result.chartjs_data || null)})">
+                              📊 Show Visualization
+                          </button>
+                          <div class="chart-container" style="display: none;">
+                              <img src="${API_BASE}${
+                result.chart_url
+              }" alt="Generated Chart">
+                          </div>`;
+            } else if (
+              result.error_message &&
+              result.error_message.includes("Chart generation error")
+            ) {
+              // Add chart error message to the response
+              messageHtml += `<br><span style="color: #dc3545; font-size: 14px;">⚠️ ${result.error_message}</span>`;
             }
 
             addMessage("bot", messageHtml);
+
+            // Display chart if available
+            if (result.chartjs_data) {
+              displayChart(
+                `${API_BASE}${result.chart_url}`,
+                "Data Visualization",
+                result.chartjs_data
+              );
+            } else if (result.chart_url) {
+              displayChart(
+                `${API_BASE}${result.chart_url}`,
+                "Data Visualization"
+              );
+            }
           } else {
             addMessage(
               "error",
@@ -599,7 +669,38 @@
         document.getElementById("loading").style.display = "none";
       }
 
-      function toggleChart(button, chartUrl) {
+      function displayChart(chartUrl, title, chartjsData) {
+        const visualizationPanel =
+          document.getElementById("visualizationPanel");
+        const canvas = document.getElementById("chartCanvas");
+
+        if (chartjsData) {
+          // Destroy existing chart if it exists
+          if (chartInstance) {
+            chartInstance.destroy();
+          }
+          // Store current chart data for type switching
+          currentChartData = chartjsData;
+          // Render Chart.js chart
+          chartInstance = new Chart(canvas, chartjsData);
+          canvas.style.display = "block";
+        } else {
+          // Fallback to static image
+          canvas.style.display = "none";
+        }
+        visualizationPanel.style.display = "block";
+      }
+
+      function updateChart() {
+        if (currentChartData && chartInstance) {
+          const chartType = document.getElementById("chartTypeSelect").value;
+          // Update chart type
+          chartInstance.config.type = chartType;
+          chartInstance.update();
+        }
+      }
+
+      function toggleChart(button, chartUrl, chartjsData) {
         const chartContainer = button.nextElementSibling;
         const isVisible = chartContainer.style.display !== "none";
 
@@ -609,6 +710,9 @@
         } else {
           chartContainer.style.display = "block";
           button.textContent = "📊 Hide Visualization";
+          if (chartjsData) {
+            displayChart(chartUrl, "Data Visualization", chartjsData);
+          }
         }
       }
 

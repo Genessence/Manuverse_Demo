@@ -209,17 +209,22 @@ class UniversalDataProcessor:
         filtered_df = df.copy()
         
         # Apply date range filter if date columns exist
-        if 'date_range' in filters and filters['date_range']:
+        if 'date_range' in filters and filters['date_range'] and isinstance(filters['date_range'], dict):
             filtered_df = self._apply_date_filter(filtered_df, filters['date_range'])
         
         # Apply categorical filters dynamically based on available columns
         categorical_filters = ['shifts', 'lines', 'operators', 'categories', 'groups']
         for filter_key in categorical_filters:
-            if filter_key in filters and filters[filter_key]:
-                # Try to find matching column (singular form)
-                column_name = filter_key.rstrip('s')  # Remove 's' to get singular form
-                if column_name in filtered_df.columns:
-                    filtered_df = filtered_df[filtered_df[column_name].isin(filters[filter_key])]
+            if filter_key in filters:
+                filter_values = filters[filter_key]
+                # Check if filter_values is not empty and is a list
+                if filter_values and isinstance(filter_values, list) and len(filter_values) > 0:
+                    # Try to find matching column (singular form)
+                    column_name = filter_key.rstrip('s')  # Remove 's' to get singular form
+                    if column_name in filtered_df.columns:
+                        # Use .isin() method properly to avoid Series ambiguity
+                        mask = filtered_df[column_name].isin(filter_values)
+                        filtered_df = filtered_df[mask]
         
         # Calculate derived metrics if applicable
         filtered_df = self._calculate_derived_metrics(filtered_df)
@@ -280,11 +285,19 @@ class UniversalDataProcessor:
         if end_date:
             end_date = self._parse_date_expression(end_date, df, date_column)
         
-        # Apply filters
+        # Apply filters using proper boolean masks to avoid Series ambiguity
         if start_date:
-            df = df[df[date_column] >= start_date]
+            # Ensure the date column is datetime type before comparison
+            if not pd.api.types.is_datetime64_any_dtype(df[date_column]):
+                df[date_column] = pd.to_datetime(df[date_column], errors='coerce')
+            mask = df[date_column] >= start_date
+            df = df[mask]
         if end_date:
-            df = df[df[date_column] <= end_date]
+            # Ensure the date column is datetime type before comparison
+            if not pd.api.types.is_datetime64_any_dtype(df[date_column]):
+                df[date_column] = pd.to_datetime(df[date_column], errors='coerce')
+            mask = df[date_column] <= end_date
+            df = df[mask]
         
         return df
     

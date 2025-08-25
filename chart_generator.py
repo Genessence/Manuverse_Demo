@@ -34,14 +34,12 @@ class ManufacturingChartGenerator:
         self.output_dir = "charts"
         os.makedirs(self.output_dir, exist_ok=True)
     
-    def plot_manufacturing_data(self, df: pd.DataFrame, 
-                              chart_config: Dict, 
-                              output_path: Optional[str] = None) -> str:
+    def plot_manufacturing_data(self, df: pd.DataFrame, chart_config: Dict, output_path: Optional[str] = None) -> str:
         """
-        Plot production and defect rates with options for line, bar or dual-axis chart.
+        Plot data with dynamic chart type support and robust error handling.
         
         Args:
-            df (pd.DataFrame): Processed manufacturing data
+            df (pd.DataFrame): Processed data
             chart_config (dict): Chart configuration from LLM
             output_path (str, optional): Custom output path
             
@@ -49,31 +47,70 @@ class ManufacturingChartGenerator:
             str: Path to the generated chart
         """
         chart_type = chart_config.get('chart_type', 'line')
-        title = chart_config.get('title', 'Manufacturing Analysis')
-        x_axis = chart_config.get('x_axis', df.columns[0])
-        y_axis = chart_config.get('y_axis', ['production'])
-        
-        # Generate output path if not provided
+        title = chart_config.get('title', 'Data Analysis')
+        x_axis = chart_config.get('x_axis', df.columns[0] if not df.empty else 'index')
+        y_axis = chart_config.get('y_axis', [df.select_dtypes(include='number').columns[0]] if not df.empty else [])
+
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"manufacturing_{chart_type}_{timestamp}.png"
+            filename = f"chart_{chart_type}_{timestamp}.png"
             output_path = os.path.join(self.output_dir, filename)
-        
-        # Create chart based on type
-        if chart_type == 'line':
-            self._create_line_chart(df, x_axis, y_axis, title, output_path)
-        elif chart_type == 'bar':
-            self._create_bar_chart(df, x_axis, y_axis, title, output_path)
-        elif chart_type == 'scatter':
-            self._create_scatter_chart(df, x_axis, y_axis, title, output_path)
-        elif chart_type == 'heatmap':
-            self._create_heatmap(df, title, output_path)
-        elif chart_type == 'pie':
-            self._create_pie_chart(df, x_axis, y_axis, title, output_path)
-        else:
-            # Default to line chart
-            self._create_line_chart(df, x_axis, y_axis, title, output_path)
-        
+
+        # Handle empty DataFrame
+        if df.empty:
+            fig, ax = plt.subplots(figsize=self.figsize)
+            ax.text(0.5, 0.5, 'No data available for visualization', ha='center', va='center', 
+                   transform=ax.transAxes, fontsize=14, color='gray')
+            ax.set_title(title, fontsize=16, fontweight='bold')
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            return output_path
+
+        # Validate x_axis and y_axis
+        if x_axis not in df.columns:
+            x_axis = df.columns[0]
+        y_axis = [col for col in y_axis if col in df.columns]
+        if not y_axis:
+            numeric_cols = df.select_dtypes(include='number').columns
+            y_axis = [numeric_cols[0]] if len(numeric_cols) > 0 else [df.columns[0]]
+
+        # Create chart based on type with error handling
+        try:
+            if chart_type == 'line':
+                self._create_line_chart(df, x_axis, y_axis, title, output_path)
+            elif chart_type == 'bar':
+                self._create_bar_chart(df, x_axis, y_axis, title, output_path)
+            elif chart_type == 'scatter':
+                self._create_scatter_chart(df, x_axis, y_axis, title, output_path)
+            elif chart_type == 'pie':
+                self._create_pie_chart(df, x_axis, y_axis, title, output_path)
+            elif chart_type == 'heatmap':
+                self._create_heatmap(df, title, output_path)
+            else:
+                # Fallback to line chart for unknown types
+                print(f"Warning: Unknown chart type '{chart_type}', falling back to line chart")
+                self._create_line_chart(df, x_axis, y_axis, title, output_path)
+        except Exception as e:
+            print(f"Error creating {chart_type} chart: {e}")
+            # Fallback to simple line chart
+            try:
+                self._create_line_chart(df, x_axis, y_axis[:1], title, output_path)
+            except Exception as fallback_error:
+                print(f"Fallback chart creation also failed: {fallback_error}")
+                # Create error chart
+                fig, ax = plt.subplots(figsize=self.figsize)
+                ax.text(0.5, 0.5, f'Chart generation failed: {str(e)[:50]}...', 
+                       ha='center', va='center', transform=ax.transAxes, fontsize=12, color='red')
+                ax.set_title(title, fontsize=16, fontweight='bold')
+                ax.set_xlim(0, 1)
+                ax.set_ylim(0, 1)
+                ax.axis('off')
+                plt.savefig(output_path, dpi=300, bbox_inches='tight')
+                plt.close()
+
         return output_path
     
     def _create_line_chart(self, df: pd.DataFrame, x_col: str, y_cols: List[str], 

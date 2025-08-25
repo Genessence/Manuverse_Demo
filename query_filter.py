@@ -26,9 +26,9 @@ class FilterResponse:
         self.is_allowed = status == QueryFilterResult.ALLOWED
 
 
-class ManufacturingQueryFilter:
+class UniversalDataQueryFilter:
     """
-    Manufacturing-specific query filter implementing multiple safety layers.
+    Universal data analysis query filter implementing multiple safety layers.
     """
     
     def __init__(self):
@@ -173,7 +173,7 @@ class ManufacturingQueryFilter:
         return QueryFilterResult.ALLOWED, ""
     
     def _check_manufacturing_relevance(self, query: str) -> Tuple[QueryFilterResult, str]:
-        """Check if query is relevant to manufacturing domain."""
+        """Check if query is relevant to data analysis domain."""
         
         query_lower = query.lower()
         
@@ -181,13 +181,13 @@ class ManufacturingQueryFilter:
         if self.irrelevant_regex.search(query):
             return (
                 QueryFilterResult.BLOCKED_IRRELEVANT,
-                "I'm a specialized manufacturing data analysis assistant. I can only help with questions about:\n"
-                "• Production data and manufacturing metrics\n"
-                "• Quality analysis and defect tracking\n"
-                "• Efficiency and performance monitoring\n"
-                "• Equipment and operational insights\n"
+                "I'm a universal data analysis assistant. I can help with questions about:\n"
+                "• Any type of business data (sales, marketing, finance, HR)\n"
+                "• Scientific and research data\n"
+                "• Survey and academic data\n"
+                "• Manufacturing and operational data\n"
                 "• Data visualization and trends\n\n"
-                "Please ask a manufacturing or industrial data-related question."
+                "Please ask a data analysis question."
             )
         
         # Check for manufacturing domain keywords
@@ -198,7 +198,19 @@ class ManufacturingQueryFilter:
         analysis_score = sum(1 for keyword in self.data_analysis_keywords 
                            if keyword in query_lower)
         
-        # If query contains data analysis terms, it might be relevant
+        # Check for common data query patterns
+        data_query_patterns = [
+            r'\b(number|count|how many)\b.*\b(.*)\b',  # "number of X", "count of Y"
+            r'\b(what|show|how|which|when|where)\b.*\b(data|trend|chart|graph)\b',
+            r'\b(analyze|analysis|compare|comparison)\b',
+            r'\b(top|best|worst|highest|lowest)\b',
+            r'\b(summary|overview|report)\b',
+            r'\b(morning|afternoon|night|day|evening)\b',  # Time-related queries
+            r'\b(line|shift|operator|production)\b',  # Manufacturing terms
+            r'\b(column|row|field|value)\b'  # Data structure terms
+        ]
+        
+        # If query contains data analysis terms, it's relevant
         if analysis_score >= 1:
             return QueryFilterResult.ALLOWED, ""
         
@@ -206,33 +218,14 @@ class ManufacturingQueryFilter:
         if manufacturing_score >= 1:
             return QueryFilterResult.ALLOWED, ""
         
-        # Check for generic data questions that could apply to manufacturing
-        generic_data_patterns = [
-            r'\b(what|show|how|which|when|where)\b.*\b(data|trend|chart|graph)\b',
-            r'\b(analyze|analysis|compare|comparison)\b',
-            r'\b(top|best|worst|highest|lowest)\b',
-            r'\b(summary|overview|report)\b'
-        ]
-        
-        for pattern in generic_data_patterns:
+        # Check for generic data questions that could apply to any dataset
+        for pattern in data_query_patterns:
             if re.search(pattern, query_lower):
                 return QueryFilterResult.ALLOWED, ""
         
-        # If no manufacturing or analysis relevance found
-        return (
-            QueryFilterResult.BLOCKED_IRRELEVANT,
-            "I specialize in manufacturing and industrial data analysis. I can help you with:\n\n"
-            "📊 **Manufacturing Data Analysis:**\n"
-            "• Production trends and performance metrics\n"
-            "• Quality control and defect analysis\n"
-            "• Equipment efficiency and downtime tracking\n"
-            "• Operational insights and KPI monitoring\n\n"
-            "📈 **Data Visualization:**\n"
-            "• Charts and graphs of manufacturing data\n"
-            "• Trend analysis and pattern recognition\n"
-            "• Comparative analysis and benchmarking\n\n"
-            "Please ask a question related to manufacturing data or operations analysis."
-        )
+        # If no relevance found, be more permissive for data analysis queries
+        # Most queries that reach this point are likely data analysis related
+        return QueryFilterResult.ALLOWED, ""
     
     def get_manufacturing_examples(self) -> str:
         """Get example questions to help users."""
