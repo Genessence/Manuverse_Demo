@@ -189,19 +189,30 @@ function ChatMessage({ message, isLoading = false }) {
         {message.chart && (
           <ChartContainer>
             {(() => {
-              const fullChartUrl = message.chart.startsWith('http') ? message.chart : `http://localhost:8000${message.chart}`;
-              console.log('🖼️ Chart URL Processing:', {
-                original: message.chart,
-                converted: fullChartUrl
-              });
-              return (
-                <ChartDisplay chartData={{
-                  type: 'image',
-                  data: null,
-                  title: 'Generated Chart',
-                  url: fullChartUrl
-                }} />
-              );
+              // Handle new Chart.js data format
+              if (typeof message.chart === 'object' && message.chart.type) {
+                console.log('📊 Chart Data Processing:', message.chart);
+                return <ChartDisplay chartData={message.chart} />;
+              }
+              
+              // Legacy: Handle old chart URL format
+              if (typeof message.chart === 'string') {
+                const fullChartUrl = message.chart.startsWith('http') ? message.chart : `http://localhost:8000${message.chart}`;
+                console.log('🖼️ Chart URL Processing:', {
+                  original: message.chart,
+                  converted: fullChartUrl
+                });
+                return (
+                  <ChartDisplay chartData={{
+                    type: 'image',
+                    data: null,
+                    title: 'Generated Chart',
+                    url: fullChartUrl
+                  }} />
+                );
+              }
+              
+              return null;
             })()}
           </ChartContainer>
         )}

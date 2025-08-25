@@ -117,6 +117,7 @@ class QueryResponse(BaseModel):
     session_id: str
     response: str
     chart_url: Optional[str] = None
+    chart_data: Optional[Dict] = None  # Chart.js compatible data
     analysis_results: Dict
     success: bool
     error_message: Optional[str] = None
@@ -511,6 +512,7 @@ async def query_data(request: QueryRequest):
         chart_type = analysis_instructions.get('chart_type', 'line')
         should_generate_chart = chart_type not in ['none', None] and chart_type in ['line', 'bar', 'scatter', 'pie', 'heatmap']
         chart_url = None
+        chart_data_js = None
         
         if should_generate_chart:
             try:
@@ -518,6 +520,9 @@ async def query_data(request: QueryRequest):
                 chart_data, chart_config = processor.prepare_chart_data(
                     aggregated_data, analysis_instructions
                 )
+                
+                # Generate Chart.js compatible data
+                chart_data_js = prepare_chartjs_data(chart_data, chart_config)
                 
                 chart_filename = f"chart_{session_id}_{uuid.uuid4().hex[:8]}.png"
                 chart_path = f"sessions/{session_id}/{chart_filename}"
@@ -531,6 +536,7 @@ async def query_data(request: QueryRequest):
                     session_id=session_id,
                     response=textual_response + "\n\n⚠️ Note: Analysis completed, but chart generation failed. Please try a different query or check your data.",
                     chart_url=None,
+                    chart_data=None,
                     analysis_results=analysis_results,
                     success=True,
                     error_message=f"Chart generation error: {str(e)}"
@@ -541,6 +547,7 @@ async def query_data(request: QueryRequest):
             session_id=session_id,
             response=textual_response,
             chart_url=chart_url,
+            chart_data=chart_data_js,  # Include Chart.js data
             analysis_results=analysis_results,
             success=True
         )
@@ -875,6 +882,84 @@ def get_universal_data_summary(df: pd.DataFrame, metadata: Dict) -> Dict:
                 summary['categorical_summary'][col] = value_counts
     
     return summary
+
+def prepare_chartjs_data(chart_data: pd.DataFrame, chart_config: Dict) -> Dict:
+    """
+    Convert chart data to Chart.js compatible format.
+    
+    Args:
+        chart_data (pd.DataFrame): Processed chart data
+        chart_config (dict): Chart configuration
+        
+    Returns:
+        dict: Chart.js compatible data structure
+    """
+    try:
+        if chart_data.empty:
+            return None
+            
+        chart_type = chart_config.get('chart_type', 'bar')
+        x_axis = chart_config.get('x_axis', chart_data.columns[0])
+        y_axis = chart_config.get('y_axis', [])
+        
+        # Ensure y_axis is a list
+        if isinstance(y_axis, str):
+            y_axis = [y_axis]
+        
+        # Get first available y_axis column
+        y_column = None
+        for col in y_axis:
+            if col in chart_data.columns:
+                y_column = col
+                break
+        
+        if not y_column:
+            # Fallback to first numeric column
+            numeric_cols = chart_data.select_dtypes(include='number').columns.tolist()
+            if numeric_cols:
+                y_column = numeric_cols[0]
+            else:
+                return None
+        
+        # Prepare labels and data
+        labels = []
+        values = []
+        
+        for _, row in chart_data.iterrows():
+            # Handle x-axis label
+            label = str(row[x_axis]) if x_axis in chart_data.columns else str(row.iloc[0])
+            labels.append(label)
+            
+            # Handle y-axis value
+            value = row[y_column] if y_column in chart_data.columns else 0
+            # Convert to float and handle NaN
+            try:
+                value = float(value) if pd.notna(value) else 0
+            except (ValueError, TypeError):
+                value = 0
+            values.append(value)
+        
+        # Convert to Chart.js format
+        chartjs_data = []
+        for i, label in enumerate(labels):
+            chartjs_data.append({
+                'name': label,
+                'label': label,
+                'value': values[i],
+                'x': label,
+                'y': values[i]
+            })
+        
+        return {
+            'type': chart_type,
+            'data': chartjs_data,
+            'title': chart_config.get('title', f'{chart_type.title()} Chart'),
+            'config': chart_config
+        }
+        
+    except Exception as e:
+        print(f"Error preparing Chart.js data: {e}")
+        return None
 
 def compile_universal_analysis_results(filtered_data, aggregated_data, instructions, metadata) -> Dict:
     """Compile analysis results for any dataset."""

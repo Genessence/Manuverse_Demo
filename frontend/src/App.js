@@ -435,11 +435,25 @@ function App() {
       console.log('🤖 BACKEND QUERY RESPONSE:', data);
       console.log('📊 Query response structure:', JSON.stringify(data, null, 2));
       
+      // Prepare chart data - prioritize Chart.js data over image URL
+      let chartData = null;
+      if (data.chart_data) {
+        // Use Chart.js data for interactive charts
+        chartData = data.chart_data;
+      } else if (data.chart_url) {
+        // Fallback to image display
+        chartData = {
+          type: 'image',
+          url: data.chart_url,
+          title: 'Generated Chart'
+        };
+      }
+      
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
         content: data.response || 'Analysis completed successfully!',
-        chart: data.chart_url,
+        chart: chartData,  // Updated to use new chart data format
         timestamp: new Date()
       };
 

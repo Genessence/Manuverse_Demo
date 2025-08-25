@@ -1,16 +1,49 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Bar, Line, Pie, Doughnut } from 'react-chartjs-2';
 import { BarChart3, TrendingUp, PieChart as PieIcon } from 'lucide-react';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 const ChartWrapper = styled.div`
   width: 100%;
-  min-height: 320px;
+  min-height: 400px;
   background-color: #0d1117;
   border-radius: 8px;
   padding: 16px;
   display: flex;
   flex-direction: column;
+`;
+
+const ChartContainer = styled.div`
+  width: 100%;
+  height: 350px;
+  position: relative;
 `;
 
 const ChartHeader = styled.div`
@@ -34,9 +67,111 @@ const NoChartMessage = styled.div`
   text-align: center;
 `;
 
-const COLORS = ['#58a6ff', '#238636', '#f85149', '#d29922', '#a371f7', '#7d8590'];
+const CHART_COLORS = {
+  primary: '#58a6ff',
+  secondary: '#238636',
+  tertiary: '#f85149',
+  quaternary: '#d29922',
+  quinary: '#a371f7',
+  senary: '#7d8590',
+  background: '#0d1117',
+  grid: '#30363d',
+  text: '#c9d1d9'
+};
+
+const COLORS_ARRAY = [
+  '#58a6ff', '#238636', '#f85149', '#d29922', 
+  '#a371f7', '#7d8590', '#ff7b72', '#79c0ff',
+  '#56d364', '#ffa657', '#f2cc60', '#b392f0'
+];
 
 function ChartDisplay({ chartData }) {
+  const chartRef = useRef(null);
+
+  // Chart.js options with dark theme
+  const getChartOptions = (chartType) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: CHART_COLORS.text,
+          font: {
+            size: 12
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: '#161b22',
+        titleColor: CHART_COLORS.text,
+        bodyColor: CHART_COLORS.text,
+        borderColor: CHART_COLORS.grid,
+        borderWidth: 1,
+      }
+    },
+    scales: chartType !== 'pie' && chartType !== 'doughnut' ? {
+      x: {
+        grid: {
+          color: CHART_COLORS.grid,
+        },
+        ticks: {
+          color: CHART_COLORS.text,
+          font: {
+            size: 11
+          }
+        }
+      },
+      y: {
+        grid: {
+          color: CHART_COLORS.grid,
+        },
+        ticks: {
+          color: CHART_COLORS.text,
+          font: {
+            size: 11
+          }
+        }
+      }
+    } : undefined
+  });
+
+  // Convert backend data to Chart.js format
+  const processChartData = (data, type) => {
+    if (!data || !Array.isArray(data)) return null;
+
+    let labels = [];
+    let datasets = [];
+
+    if (type === 'bar' || type === 'line') {
+      labels = data.map(item => item.name || item.label || item.x || 'Unknown');
+      
+      datasets = [{
+        label: 'Value',
+        data: data.map(item => item.value || item.y || 0),
+        backgroundColor: type === 'bar' ? CHART_COLORS.primary : 'transparent',
+        borderColor: CHART_COLORS.primary,
+        borderWidth: 2,
+        fill: type === 'line' ? false : true,
+        tension: type === 'line' ? 0.4 : 0,
+        pointBackgroundColor: CHART_COLORS.primary,
+        pointBorderColor: CHART_COLORS.primary,
+        pointRadius: type === 'line' ? 4 : 0,
+      }];
+    } else if (type === 'pie' || type === 'doughnut') {
+      labels = data.map(item => item.name || item.label || 'Unknown');
+      
+      datasets = [{
+        data: data.map(item => item.value || 0),
+        backgroundColor: COLORS_ARRAY.slice(0, data.length),
+        borderColor: CHART_COLORS.background,
+        borderWidth: 2,
+      }];
+    }
+
+    return { labels, datasets };
+  };
+
   if (!chartData) {
     return (
       <ChartWrapper>
@@ -51,162 +186,83 @@ function ChartDisplay({ chartData }) {
   const { type, data, title, url } = chartData;
 
   const renderChart = () => {
+    // Handle image type (fallback for backend-generated charts)
+    if (type === 'image' && url) {
+      return (
+        <div style={{ 
+          width: '100%', 
+          height: '100%', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          padding: '10px'
+        }}>
+          <img 
+            src={url} 
+            alt="Generated Chart" 
+            style={{ 
+              width: '125%',
+              height: 'auto',
+              maxHeight: '320px',
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              marginLeft: '-12.5%'
+            }} 
+            onError={(e) => {
+              console.error('Chart image failed to load:', url);
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'block';
+            }}
+          />
+          <div style={{ display: 'none', color: '#7d8590', fontSize: '12px', marginTop: '8px' }}>
+            Chart image failed to load. URL: {url}
+          </div>
+        </div>
+      );
+    }
+
+    // Process data for Chart.js
+    const chartJsData = processChartData(data, type);
+    
+    if (!chartJsData) {
+      return (
+        <NoChartMessage>
+          <BarChart3 size={20} style={{ marginRight: '8px' }} />
+          Invalid chart data format
+        </NoChartMessage>
+      );
+    }
+
+    const options = getChartOptions(type);
+
     switch (type) {
       case 'bar':
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-              <XAxis 
-                dataKey="name" 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: '#161b22',
-                  border: '1px solid #30363d',
-                  borderRadius: '8px',
-                  color: '#c9d1d9'
-                }}
-              />
-              <Bar dataKey="value" fill="#58a6ff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <ChartContainer>
+            <Bar ref={chartRef} data={chartJsData} options={options} />
+          </ChartContainer>
         );
 
       case 'line':
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-              <XAxis 
-                dataKey="name" 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: '#161b22',
-                  border: '1px solid #30363d',
-                  borderRadius: '8px',
-                  color: '#c9d1d9'
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#58a6ff" 
-                strokeWidth={2}
-                dot={{ fill: '#58a6ff', strokeWidth: 2, r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <ChartContainer>
+            <Line ref={chartRef} data={chartJsData} options={options} />
+          </ChartContainer>
         );
 
       case 'pie':
         return (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: '#161b22',
-                  border: '1px solid #30363d',
-                  borderRadius: '8px',
-                  color: '#c9d1d9'
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          <ChartContainer>
+            <Pie ref={chartRef} data={chartJsData} options={options} />
+          </ChartContainer>
         );
 
-      case 'image':
+      case 'doughnut':
         return (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            padding: '10px'
-          }}>
-            <img 
-              src={url} 
-              alt="Generated Chart" 
-              style={{ 
-                width: '125%',
-                height: 'auto',
-                maxHeight: '280px',
-                objectFit: 'contain',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-                marginLeft: '-12.5%'
-              }} 
-              onError={(e) => {
-                console.error('Chart image failed to load:', url);
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'block';
-              }}
-            />
-            <div style={{ display: 'none', color: '#7d8590', fontSize: '12px', marginTop: '8px' }}>
-              Chart image failed to load. URL: {url}
-            </div>
-          </div>
-        );
-        
-      case 'area':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#30363d" />
-              <XAxis 
-                dataKey="name" 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <YAxis 
-                stroke="#7d8590"
-                fontSize={12}
-              />
-              <Tooltip 
-                contentStyle={{
-                  backgroundColor: '#161b22',
-                  border: '1px solid #30363d',
-                  borderRadius: '8px',
-                  color: '#c9d1d9'
-                }}
-              />
-              <Area 
-                type="monotone" 
-                dataKey="value" 
-                stroke="#58a6ff" 
-                fill="#58a6ff" 
-                fillOpacity={0.3}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          <ChartContainer>
+            <Doughnut ref={chartRef} data={chartJsData} options={options} />
+          </ChartContainer>
         );
 
       default:
@@ -226,6 +282,7 @@ function ChartDisplay({ chartData }) {
       case 'line':
         return <TrendingUp size={16} />;
       case 'pie':
+      case 'doughnut':
         return <PieIcon size={16} />;
       case 'image':
         return <BarChart3 size={16} />;
